@@ -17,7 +17,7 @@ def train_and_tune_baseline():
         # vectorize
         vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1,2))
         X_train = vectorizer.fit_transform(train['text_clean'])
-        X_val = vectorizer.fit_transform(val['text_clean'])
+        X_val = vectorizer.transform(val['text_clean'])
 
         param_grid = {'C': [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]}
         grid_search = GridSearchCV(
@@ -39,8 +39,8 @@ def train_and_tune_baseline():
 
         # evaluate
         y_pred = model.predict(X_val)
-        accuracy = accuracy_score(y_pred, val['sentiment'])
-        f1 = f1_score(y_pred, val['sentiment'], average='weighted')
+        accuracy = accuracy_score(val['sentiment'], y_pred)
+        f1 = f1_score(val['sentiment'], y_pred, average='weighted')
 
         # log metrics
         mlflow.log_metric("val_accuracy", accuracy)
@@ -55,5 +55,36 @@ def train_and_tune_baseline():
         print("\nClassification Report:")
         print(classification_report(val['sentiment'], y_pred))
 
+def compare_C_values():
+    train, val, test = load_and_split_data(csv_path)
+
+    # vectorize
+    vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1,2))
+    X_train = vectorizer.fit_transform(train['text_clean'])
+    X_val = vectorizer.fit_transform(val['text_clean'])
+
+    for C in [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]:
+         with mlflow.start_run(run_name=f"logreg_C_{C}"):
+            model = LogisticRegression(C=C, max_iter=5000)
+            model.fit(X_train, train['sentiment'])
+
+            y_pred = model.predict(X_val)
+            f1 = f1_score(y_pred, val['sentiment'], average='weighted')
+            accuracy = accuracy_score(val['sentiment'], y_pred)
+
+            # ... train and evaluate
+            mlflow.log_param("C", C)
+            mlflow.log_metric("val_f1", f1)
+            mlflow.log_metric("accuracy", accuracy)
+
+            # mlflow.sklearn.log_model(model, "model")
+
+            print(f"✅ Logged to MLflow: Accuracy={accuracy:.3f}, F1={f1:.3f}")
+
+
+
+
 if __name__ == "__main__":
     train_and_tune_baseline()
+
+    compare_C_values()
